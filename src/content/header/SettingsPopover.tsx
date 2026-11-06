@@ -1,12 +1,20 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import {
+  applyContentWidth,
+  CONTENT_WIDTH_OPTIONS,
+} from '../../host/contentWidth';
+import {
   HIGHLIGHT_COLOR_OPTIONS,
   highlightColorValue,
 } from '../../lib/highlightColors';
 import {
+  DEFAULT_CONTENT_WIDTH,
   DEFAULT_EXPORT_FORMAT,
+  getContentWidth,
   getExportFormat,
+  onContentWidthChanged,
   onExportFormatChanged,
+  setContentWidth as storeContentWidth,
   setExportFormat as storeExportFormat,
 } from '../../lib/storage';
 import type {
@@ -77,6 +85,7 @@ export function SettingsPopover({
   returnFocusRef,
 }: SettingsPopoverProps) {
   const [exportFormat, setExportFormat] = useState(DEFAULT_EXPORT_FORMAT);
+  const [contentWidth, setContentWidth] = useState(DEFAULT_CONTENT_WIDTH);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -89,10 +98,20 @@ export function SettingsPopover({
       },
       () => undefined,
     );
-    const unsubscribe = onExportFormatChanged(setExportFormat);
+    getContentWidth().then(
+      (width) => {
+        if (!cancelled) {
+          setContentWidth(width);
+        }
+      },
+      () => undefined,
+    );
+    const stopExportFormat = onExportFormatChanged(setExportFormat);
+    const stopContentWidth = onContentWidthChanged(setContentWidth);
     return () => {
       cancelled = true;
-      unsubscribe();
+      stopExportFormat();
+      stopContentWidth();
     };
   }, []);
 
@@ -168,6 +187,20 @@ export function SettingsPopover({
           options: HIGHLIGHT_COLOR_OPTIONS,
           ariaLabel: 'Highlight color',
           onChange: onHighlightColorChange,
+        }}
+      />
+      <PopoverRow
+        label="Text width"
+        trailing={optionLabel(CONTENT_WIDTH_OPTIONS, contentWidth)}
+        select={{
+          value: contentWidth,
+          options: CONTENT_WIDTH_OPTIONS,
+          ariaLabel: 'Text width',
+          onChange: (width) => {
+            setContentWidth(width);
+            applyContentWidth(width);
+            storeContentWidth(width).catch(() => undefined);
+          },
         }}
       />
       <PopoverRow

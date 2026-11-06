@@ -98,3 +98,32 @@ describe('SettingsPopover import', () => {
     expect(queryByRole('alert')).toBeNull();
   });
 });
+
+describe('SettingsPopover text width', () => {
+  afterEach(() => {
+    document.documentElement.style.removeProperty('--sep-plus-content-max-width');
+  });
+
+  it('shows the saved width', async () => {
+    vi.mocked(chrome.storage.local.get).mockImplementation(
+      async () => ({ contentWidth: 'wider' }) as never,
+    );
+    const { getByLabelText } = renderPopover(vi.fn());
+    await vi.waitFor(() =>
+      expect((getByLabelText('Text width') as HTMLSelectElement).value).toBe('wider'),
+    );
+  });
+
+  it('widens the column at once and saves the choice', async () => {
+    const { getByLabelText } = renderPopover(vi.fn());
+    const select = getByLabelText('Text width') as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: 'wide' } });
+    expect(
+      document.documentElement.style.getPropertyValue('--sep-plus-content-max-width'),
+    ).toContain('700px');
+    expect(select.value).toBe('wide');
+    await vi.waitFor(() =>
+      expect(chrome.storage.local.set).toHaveBeenCalledWith({ contentWidth: 'wide' }),
+    );
+  });
+});

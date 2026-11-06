@@ -4,6 +4,8 @@ export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink' | 'purple';
 
 export type AnnotationExportFormat = 'json' | 'md' | 'doc';
 
+export type ContentWidth = 'narrow' | 'standard' | 'wide' | 'wider';
+
 export type TocItem = {
   href: string;
   text: string;

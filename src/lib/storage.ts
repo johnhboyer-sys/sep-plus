@@ -1,5 +1,6 @@
 import type {
   AnnotationExportFormat,
+  ContentWidth,
   HighlightColor,
   ThemePreference,
 } from './types';
@@ -9,6 +10,8 @@ const HIGHLIGHT_COLOR_KEY = 'highlightColor';
 export const DEFAULT_HIGHLIGHT_COLOR: HighlightColor = 'yellow';
 const EXPORT_FORMAT_KEY = 'annotationExportFormat';
 export const DEFAULT_EXPORT_FORMAT: AnnotationExportFormat = 'json';
+const CONTENT_WIDTH_KEY = 'contentWidth';
+export const DEFAULT_CONTENT_WIDTH: ContentWidth = 'standard';
 
 /**
  * False once the extension has been updated or reloaded under an open tab:
@@ -173,6 +176,47 @@ export function onExportFormatChanged(
     }
     const next = changes[EXPORT_FORMAT_KEY].newValue;
     if (isExportFormat(next)) {
+      callback(next);
+    }
+  };
+  chrome.storage.onChanged.addListener(listener);
+  return () => chrome.storage.onChanged.removeListener(listener);
+}
+
+function isContentWidth(value: unknown): value is ContentWidth {
+  return (
+    value === 'narrow' ||
+    value === 'standard' ||
+    value === 'wide' ||
+    value === 'wider'
+  );
+}
+
+export async function getContentWidth(): Promise<ContentWidth> {
+  const result = await chrome.storage.local.get(CONTENT_WIDTH_KEY);
+  const stored = result[CONTENT_WIDTH_KEY];
+  return isContentWidth(stored) ? stored : DEFAULT_CONTENT_WIDTH;
+}
+
+export async function setContentWidth(width: ContentWidth): Promise<void> {
+  if (!extensionAlive()) {
+    return;
+  }
+  await chrome.storage.local.set({ [CONTENT_WIDTH_KEY]: width });
+}
+
+export function onContentWidthChanged(
+  callback: (width: ContentWidth) => void
+): () => void {
+  const listener: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (
+    changes,
+    area
+  ) => {
+    if (area !== 'local' || !changes[CONTENT_WIDTH_KEY]) {
+      return;
+    }
+    const next = changes[CONTENT_WIDTH_KEY].newValue;
+    if (isContentWidth(next)) {
       callback(next);
     }
   };

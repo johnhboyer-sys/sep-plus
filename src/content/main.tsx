@@ -13,17 +13,21 @@ import {
   restyleSearchResults,
   wrapSiteContentColumn,
 } from '../host/bootstrap';
+import { applyContentWidth } from '../host/contentWidth';
 import { initFootnotes } from '../host/footnotes';
-import { detachNative, rollbackHost } from '../host/rollback';
+import { detachNative, onRollback, rollbackHost } from '../host/rollback';
 import {
   collectContentsTocItems,
   collectTocItems,
   prepareArticleNav,
 } from '../host/toc';
 import {
+  DEFAULT_CONTENT_WIDTH,
   DEFAULT_HIGHLIGHT_COLOR,
+  getContentWidth,
   getHighlightColor,
   getTheme,
+  onContentWidthChanged,
   readCachedTheme,
 } from '../lib/storage';
 import { normalizeEntryUrl } from '../lib/annotations';
@@ -287,9 +291,10 @@ function mountShell(
 }
 
 async function mount(): Promise<void> {
-  const [theme, highlightColor] = await Promise.all([
+  const [theme, highlightColor, contentWidth] = await Promise.all([
     themePromise,
     highlightColorPromise,
+    contentWidthPromise,
   ]);
 
   const articleMode = isArticlePage();
@@ -321,6 +326,14 @@ async function mount(): Promise<void> {
   }
 
   bootstrapHost(theme);
+  // Before the reveal, so the column never jumps from the default width.
+  applyContentWidth(contentWidth);
+  const stopContentWidthSync = onContentWidthChanged(applyContentWidth);
+  // A rolled-back page is native SEP; width changes elsewhere must not touch it.
+  onRollback(() => {
+    stopContentWidthSync();
+    applyContentWidth('standard');
+  });
   mountShell(
     tocItems,
     theme,
@@ -396,6 +409,13 @@ const highlightColorPromise: Promise<HighlightColor> = isHtmlDocument
       return DEFAULT_HIGHLIGHT_COLOR;
     })
   : Promise.resolve(DEFAULT_HIGHLIGHT_COLOR);
+
+const contentWidthPromise = isHtmlDocument
+  ? getContentWidth().catch((error: unknown) => {
+      console.warn('SEP+ could not load the saved text width.', error);
+      return DEFAULT_CONTENT_WIDTH;
+    })
+  : Promise.resolve(DEFAULT_CONTENT_WIDTH);
 
 // Only now does boot() own the reveal; until here, a throw leaves boot.css's
 // failsafe in charge so the page can't stay hidden.
