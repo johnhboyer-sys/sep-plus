@@ -9,13 +9,24 @@ import { description, version } from './package.json';
 const SHIM = fileURLToPath(new URL('./src/userscript/chrome.ts', import.meta.url));
 const SHIM_DIR = fileURLToPath(new URL('./src/userscript/', import.meta.url));
 
+// Set by .github/workflows/userscript.yml. A build number keeps @version
+// rising with every published build; the base URL is where that build lives,
+// so userscript managers can check it for updates.
+const BUILD = process.env.USERSCRIPT_BUILD;
+const UPDATE_BASE = process.env.USERSCRIPT_UPDATE_BASE;
+const UPDATE_LINES = UPDATE_BASE
+  ? `// @updateURL    ${UPDATE_BASE}/sep-plus.meta.js
+// @downloadURL  ${UPDATE_BASE}/sep-plus.user.js
+`
+  : '';
+
 const HEADER = `// ==UserScript==
 // @name         SEP+
 // @description  ${description}
-// @version      ${version}
+// @version      ${BUILD ? `${version}.${BUILD}` : version}
 // @author       Andrew Shen (userscript build of github.com/andrewshen/sep-plus)
 // @homepageURL  https://github.com/andrewshen/sep-plus
-// @match        http://plato.stanford.edu/*
+${UPDATE_LINES}// @match        http://plato.stanford.edu/*
 // @match        https://plato.stanford.edu/*
 // @run-at       document-start
 // @inject-into  content
@@ -49,7 +60,11 @@ function chromeShim(): Plugin {
   };
 }
 
-/** Add the metadata block; drop the CSS file (entry.ts inlines it). */
+/**
+ * Add the metadata block; drop the CSS file (entry.ts inlines it). The block
+ * alone also goes in sep-plus.meta.js, which update checks fetch instead of
+ * the whole script.
+ */
 function userscriptFile(): Plugin {
   return {
     name: 'sep-plus-userscript-file',
@@ -63,6 +78,7 @@ function userscriptFile(): Plugin {
           delete bundle[name];
         }
       }
+      this.emitFile({ type: 'asset', fileName: 'sep-plus.meta.js', source: HEADER });
     },
   };
 }

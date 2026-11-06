@@ -1,0 +1,92 @@
+name: Userscript
+
+# Once a day, merge the original SEP+ (andrewshen/sep-plus, main) into this
+# branch, test it, build the userscript, and publish it to the
+# `userscript-dist` branch, where userscript managers check for updates.
+# The merge only happens inside this run; nothing is pushed back to the
+# source branch, so upstream changes to workflow files can't block the push.
+# A merge conflict or a failing test stops the run, and the last published
+# build stays in place.
+
+on:
+  schedule:
+    - cron: '17 9 * * *'
+  workflow_dispatch:
+  push:
+    branches: [userscript-build]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: userscript
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: userscript-build
+          # Full history, so the upstream merge can find a common ancestor.
+          fetch-depth: 0
+
+      - name: Merge the original SEP+
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git remote add upstream https://github.com/andrewshen/sep-plus.git
+          git fetch --no-tags upstream main
+          git merge --no-edit upstream/main
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      # The build number counts the builds already published, so @version
+      # rises with every publication however the source history changes.
+      - name: Check out the published builds
+        run: |
+          if git fetch --no-tags origin userscript-dist; then
+            git worktree add publish FETCH_HEAD
+            echo "USERSCRIPT_BUILD=$(( $(git -C publish rev-list --count HEAD) + 1 ))" >> "$GITHUB_ENV"
+          else
+            git worktree add --orphan -b userscript-dist publish
+            echo "USERSCRIPT_BUILD=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build
+        run: |
+          export USERSCRIPT_UPDATE_BASE="https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/userscript-dist"
+          npm run build:userscript
+
+      # Publish only when something besides the @version line changed.
+      - name: Publish
+        run: |
+          same() {
+            [ -f "publish/$1" ] &&
+              cmp -s <(grep -v '^// @version' "publish/$1") \
+                     <(grep -v '^// @version' "dist/userscript/$1")
+          }
+          if same sep-plus.user.js && same sep-plus.meta.js; then
+            echo 'No change since the last published build.'
+            exit 0
+          fi
+          cp dist/userscript/sep-plus.user.js dist/userscript/sep-plus.meta.js publish/
+          cd publish
+          git add sep-plus.user.js sep-plus.meta.js
+          git commit -m "Build $(grep -m1 '@version' sep-plus.meta.js | awk '{print $3}') from $(git -C .. rev-parse --short HEAD)"
+          git push origin HEAD:userscript-dist
