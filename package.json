@@ -10,6 +10,7 @@
     "build": "tsc --noEmit && npm run build:chrome && npm run build:firefox",
     "build:chrome": "vite build --mode chrome",
     "build:firefox": "vite build --mode firefox",
+    "build:userscript": "vite build --config vite.userscript.config.ts",
     "lint:firefox": "web-ext lint --source-dir dist/firefox",
     "check:dist": "node scripts/check-dist.mjs",
     "zip:chrome": "npm run build:chrome && web-ext build --source-dir dist/chrome --artifacts-dir artifacts/chrome --overwrite-dest",
